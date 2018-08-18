@@ -47,15 +47,7 @@ Feature: Content
 #    | body  | A placeholder           |
 #    Then I should see the heading "My article with fields!"
 #    And I should see the text "A placeholder"
-
-  @api
-  Scenario: Create users
-    Given users:
-    | name     | mail            | status |
-    | Joe User | joe@example.com | 1      |
-    And I am logged in as a user with the "administrator" role
-    When I visit "admin/people"
-    Then I should see the link "Joe User"
+  
 
   @api
   Scenario: Login as a user created during this scenario
