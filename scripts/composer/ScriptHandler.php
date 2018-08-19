@@ -22,7 +22,9 @@ class ScriptHandler
   public static function createRequiredFiles(Event $event)
   {
     $fs = new Filesystem();
-    $root = static::getDrupalRoot(getcwd());
+
+    $drupal_root = static::getDrupalRoot(getcwd());
+    $project_root = getcwd();
 
     $dirs = [
       'modules',
@@ -32,19 +34,55 @@ class ScriptHandler
 
     // Required for unit testing
     foreach ($dirs as $dir) {
-      if (!$fs->exists($root . '/'. $dir)) {
-        $fs->mkdir($root . '/'. $dir);
-        $fs->touch($root . '/'. $dir . '/.gitkeep');
+      if (!$fs->exists($project_root . '/'. $dir)) {
+        $fs->mkdir($project_root . '/'. $dir);
+        $fs->touch($project_root . '/'. $dir . '/.gitkeep');
       }
     }
 
     // Create the files directory with chmod 0777
-    if (!$fs->exists($root . '/sites/default/files')) {
+    if (!$fs->exists($project_root . '/sites/default/files')) {
       $oldmask = umask(0);
-      $fs->mkdir($root . '/sites/default/files', 0777);
+      $fs->mkdir($project_root . '/sites/default/files', 0777);
       umask($oldmask);
       $event->getIO()->write("Create a sites/default/files directory with chmod 0777");
     }
+
+    // Removing some files we don't want to exist.
+    $fs->remove($drupal_root . '/sites/default/settings.php');
+    $fs->remove($drupal_root . '/sites/default/settings.local.php');
+
+    // Link files from custom to their destinations within the drupal install.
+    $fs->symlink('../../custom/modules', $drupal_root . '/modules/custom');
+    $fs->symlink('../../custom/profiles', $drupal_root . '/profiles/custom');
+    $fs->symlink('../../custom/themes', $drupal_root . '/themes/custom');
+
+    // Drush site-install sometimes renders things in the site folders unwriteable.
+    // Conversely it sometimes seems to need to write to them.
+    $sites_default =  "{$drupal_root}/sites/default";
+    $settings = "{$sites_default}/settings.php";
+
+    // Working around drush site-install problems.
+    $sites_default_perm = fileperms($drupal_root . '/sites/default');
+    $settings_perm = file_exists($settings) ? fileperms($settings) : FALSE;
+
+    $fs->chmod($drupal_root . '/sites/default', 755);
+    if (file_exists($drupal_root . '/sites/default/settings.php')) {
+      $fs->chmod($drupal_root . '/sites/default/settings.php', 755);
+    }
+
+    // Our local settings file should get linked as well.
+    $fs->symlink('../../../custom/site/settings.local.php', $drupal_root . '/sites/default/settings.local.php');
+
+    // We copy this file out because drush site-installs like to write over it.
+    $fs->copy($project_root . '/custom/site/settings.php', $drupal_root . '/sites/default/settings.php');
+
+    // We should set these back to whatever they were before.
+    if ($settings_perm) {
+      $fs->chmod($drupal_root . '/sites/default/settings.php', $settings_perm);
+    }
+    $fs->chmod($drupal_root . '/sites/default', $sites_default_perm);
+
   }
 
   // This is called by the QuickSilver deploy hook to convert from
